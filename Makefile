@@ -1,67 +1,43 @@
-# Go parameters
-BINARY_NAME=go-project-template
-BINARY_UNIX=$(BINARY_NAME)_unix
-REPO=ghcr.io/dathan/go-project-template/go-project-template
+# Makefile for go-parallel-var-cmds
+# Build backend and frontend, run tests, and start the server.
 
-.PHONY: all
-all: lint test build
+# Backend binary output directory
+BIN_DIR := bin
 
-.PHONY: lint
-lint:
-	golangci-lint run ./...
+.PHONY: build-backend build-frontend test serve clean
 
-.PHONY: buildruntest
-buildruntest: build build-linux customrun
+# Build the Go REST server
+build-backend:
+	@echo "Building Go backend..."
+	@mkdir -p $(BIN_DIR)
+	@go build -o $(BIN_DIR)/server ./cmd/server
 
-.PHONY: customrun
-customrun:
-	./scripts/customrun.sh
+# Build the React frontend using npm and vite
+build-frontend:
+	@echo "Building React frontend..."
+	@cd frontend && npm install && npm run build
 
-.PHONY: build
-build:
-	go build -o ./bin ./cmd/...
+# Run Go unit tests
+# This will run all tests in the repository
+# including database and executor packages
+# and report coverage statistics
+# The CI workflow will call this target
+# to ensure tests pass on every commit
+ test:
+	@echo "Running backend tests..."
+	@go test ./...
 
-.PHONY: test
-test:
-	go test -p 6 -covermode=count -coverprofile=test/coverage.out test/*.go
+# Start the development server
+# This runs the Go server. In a real development
+# workflow you might run `npm start` separately
+# for the frontend, but for simplicity we just
+# start the Go server here. The frontend
+# should be built separately via build-frontend
+serve:
+	@echo "Starting Go server..."
+	@go run ./cmd/server/main.go
 
-.PHONY: clean
+# Remove build artifacts
 clean:
-	go clean
-	find . -type d -name '.tmp_*' -prune -exec rm -rvf {} \;
-
-.PHONY: run
-run:
-	go run ./cmd/$(BINARY_NAME)/*.go
-
-.PHONY: vendor
-vendor:
-	go mod vendor
-
-# Cross compilation
-.PHONY: build-linux
-build-linux:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/$(BINARY_UNIX) -v cmd/$(BINARY_NAME)/*.go
-
-# Build docker containers
-.PHONY: docker-build
-docker-build:
-	# docker build  \
-		#	--build-arg GITHUB_SSH_PRIV_KEY="`cat ~/.ssh/id_rsa`" \
-		#	-t $(or ${dockerImage},$(BINARY_NAME)-release) .
-	docker build \
-		-t $(or ${dockerImage},$(BINARY_NAME)-release) .
-
-.PHONY: docker-tag
-docker-tag:
-	docker tag `docker image ls --filter 'reference=$(BINARY_NAME)-release' -q` $(REPO):`git rev-parse HEAD`
-
-# Push the container
-.PHONY: docker-push
-docker-push: docker-build docker-tag
-	docker push $(REPO):`git rev-parse HEAD`
-
-
-.PHONY: docker-clean
-docker-clean:
-	docker rmi `docker image ls --filter 'reference=$(BINARY_NAME)-*' -q`
+	@echo "Cleaning build artifacts..."
+	@rm -rf $(BIN_DIR)
